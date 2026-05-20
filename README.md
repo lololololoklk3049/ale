@@ -51,20 +51,6 @@ npm run dev
 
 Visit **http://localhost:8080** in your browser.
 
-## Architecture
-
-```
-red-browser/
-├── server.js          # Express + bare-server-node (WebSocket proxy transport)
-├── setup.js           # Copies Scramjet assets after npm install
-├── package.json
-└── public/
-    ├── index.html     # RED browser UI (single-page app)
-    ├── sw.js          # Scramjet service worker
-    └── static/
-        ├── scramjet/  # Scramjet codec + worker (copied by setup.js)
-        └── baremux/   # BareMux transport worker (copied by setup.js)
-```
 
 ### How the proxy works
 
