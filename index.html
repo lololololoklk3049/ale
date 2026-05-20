@@ -1,0 +1,1761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RED Browser</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet" />
+  <style>
+    /* ─── CORE VARIABLES ─────────────────────────────────── */
+    :root {
+      --red:        #ff0033;
+      --red-dim:    #cc0025;
+      --red-dark:   #660010;
+      --red-glow:   rgba(255, 0, 51, 0.55);
+      --red-faint:  rgba(255, 0, 51, 0.12);
+      --bg:         #070707;
+      --bg2:        #0e0e0e;
+      --bg3:        #151515;
+      --bg4:        #1c1c1c;
+      --border:     rgba(255, 0, 51, 0.25);
+      --border-bright: rgba(255, 0, 51, 0.65);
+      --text:       #f0f0f0;
+      --text-dim:   #888;
+      --text-muted: #444;
+      --chrome-h:   42px;
+      --tab-h:      36px;
+      --sidebar-w:  260px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%; width: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Rajdhani', sans-serif;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    /* ─── SCANLINES OVERLAY ──────────────────────────────── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 9999;
+      pointer-events: none;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,0,0,0.08) 2px,
+        rgba(0,0,0,0.08) 4px
+      );
+    }
+
+    /* ─── NEON GLOW UTILITY ──────────────────────────────── */
+    .glow { text-shadow: 0 0 8px var(--red), 0 0 20px var(--red-glow); }
+    .box-glow { box-shadow: 0 0 12px var(--red-glow), inset 0 0 12px rgba(255,0,51,.04); }
+
+    /* ─── LAYOUT ─────────────────────────────────────────── */
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      width: 100vw;
+    }
+
+    /* ─── TOP CHROME ─────────────────────────────────────── */
+    #chrome {
+      display: flex;
+      align-items: center;
+      height: var(--chrome-h);
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      padding: 0 10px;
+      gap: 8px;
+      flex-shrink: 0;
+      position: relative;
+    }
+
+    #chrome::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--red), transparent);
+      box-shadow: 0 0 10px var(--red);
+    }
+
+    /* Logo */
+    #logo {
+      font-family: 'Orbitron', sans-serif;
+      font-weight: 900;
+      font-size: 18px;
+      color: var(--red);
+      text-shadow: 0 0 10px var(--red), 0 0 30px var(--red-glow);
+      letter-spacing: 3px;
+      flex-shrink: 0;
+      cursor: default;
+      padding: 0 6px;
+    }
+
+    #logo span { color: #fff; text-shadow: 0 0 6px rgba(255,255,255,.3); }
+
+    /* Nav Buttons */
+    .nav-btn {
+      width: 30px; height: 30px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-dim);
+      font-size: 14px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all .15s;
+      flex-shrink: 0;
+    }
+    .nav-btn:hover {
+      background: var(--red-faint);
+      border-color: var(--border-bright);
+      color: var(--red);
+      box-shadow: 0 0 8px var(--red-glow);
+    }
+    .nav-btn:active { transform: scale(.93); }
+    .nav-btn:disabled { opacity: .3; cursor: not-allowed; }
+
+    /* URL Bar */
+    #url-wrap {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      height: 30px;
+      padding: 0 10px;
+      gap: 8px;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    #url-wrap:focus-within {
+      border-color: var(--red);
+      box-shadow: 0 0 10px var(--red-glow);
+    }
+
+    #security-icon {
+      font-size: 11px;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+    #security-icon.secure { color: #00ff88; text-shadow: 0 0 6px #00ff88; }
+    #security-icon.proxied { color: var(--red); text-shadow: 0 0 6px var(--red-glow); }
+
+    #url-bar {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 12.5px;
+      letter-spacing: .5px;
+      min-width: 0;
+    }
+    #url-bar::placeholder { color: var(--text-muted); }
+    #url-bar::selection { background: var(--red-dark); }
+
+    #go-btn {
+      flex-shrink: 0;
+      background: var(--red);
+      border: none;
+      border-radius: 3px;
+      color: #fff;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      padding: 3px 8px;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    #go-btn:hover { background: #ff1144; box-shadow: 0 0 10px var(--red-glow); }
+
+    /* Action Buttons */
+    .action-btn {
+      width: 30px; height: 30px;
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 4px;
+      color: var(--text-dim);
+      font-size: 15px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all .15s;
+      flex-shrink: 0;
+    }
+    .action-btn:hover {
+      background: var(--red-faint);
+      border-color: var(--border);
+      color: var(--red);
+      box-shadow: 0 0 8px var(--red-glow);
+    }
+    .action-btn.active {
+      color: var(--red);
+      border-color: var(--border-bright);
+      background: var(--red-faint);
+    }
+
+    /* ─── TAB BAR ────────────────────────────────────────── */
+    #tab-bar {
+      display: flex;
+      align-items: center;
+      height: var(--tab-h);
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      padding: 0 8px;
+      gap: 4px;
+      flex-shrink: 0;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    #tab-bar::-webkit-scrollbar { display: none; }
+
+    .tab {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      height: 28px;
+      padding: 0 12px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 5px 5px 0 0;
+      cursor: pointer;
+      min-width: 120px;
+      max-width: 200px;
+      transition: all .15s;
+      flex-shrink: 0;
+      position: relative;
+    }
+    .tab:hover { background: var(--bg4); border-color: rgba(255,0,51,.4); }
+    .tab.active {
+      background: var(--bg4);
+      border-color: var(--red);
+      border-bottom-color: var(--bg4);
+      box-shadow: 0 -2px 8px var(--red-glow);
+    }
+    .tab.active::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; height: 2px;
+      background: var(--red);
+      box-shadow: 0 0 6px var(--red);
+      border-radius: 5px 5px 0 0;
+    }
+
+    .tab-favicon {
+      width: 14px; height: 14px;
+      flex-shrink: 0;
+      font-size: 12px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .tab-title {
+      flex: 1;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--text-dim);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      letter-spacing: .3px;
+    }
+    .tab.active .tab-title { color: var(--text); }
+    .tab-close {
+      width: 14px; height: 14px;
+      border-radius: 3px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px;
+      color: var(--text-muted);
+      flex-shrink: 0;
+      transition: all .1s;
+    }
+    .tab-close:hover { background: var(--red); color: #fff; }
+
+    #new-tab-btn {
+      width: 24px; height: 24px;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-muted);
+      font-size: 16px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      transition: all .15s;
+    }
+    #new-tab-btn:hover { border-color: var(--red); color: var(--red); box-shadow: 0 0 6px var(--red-glow); }
+
+    /* ─── MAIN CONTENT AREA ──────────────────────────────── */
+    #content-area {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ─── BROWSER FRAMES ─────────────────────────────────── */
+    #frames {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .frame {
+      position: absolute;
+      inset: 0;
+      display: none;
+    }
+    .frame.active { display: block; }
+
+    .frame iframe {
+      width: 100%; height: 100%;
+      border: none;
+      background: #fff;
+    }
+
+    /* ─── HOME PAGE ──────────────────────────────────────── */
+    .home-page {
+      width: 100%; height: 100%;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 32px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .home-page::before {
+      content: '';
+      position: absolute;
+      width: 600px; height: 600px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(255,0,51,.06) 0%, transparent 70%);
+      animation: pulse-bg 4s ease-in-out infinite;
+    }
+
+    @keyframes pulse-bg {
+      0%, 100% { transform: scale(1); opacity: .7; }
+      50% { transform: scale(1.1); opacity: 1; }
+    }
+
+    .home-logo {
+      font-family: 'Orbitron', sans-serif;
+      font-weight: 900;
+      font-size: clamp(52px, 10vw, 96px);
+      color: var(--red);
+      text-shadow: 0 0 20px var(--red), 0 0 60px var(--red-glow), 0 0 100px rgba(255,0,51,.3);
+      letter-spacing: 12px;
+      animation: flicker 5s ease-in-out infinite;
+      position: relative;
+    }
+
+    @keyframes flicker {
+      0%, 95%, 100% { opacity: 1; }
+      96% { opacity: .85; }
+      97% { opacity: 1; }
+      98% { opacity: .9; }
+    }
+
+    .home-tagline {
+      font-family: 'Share Tech Mono', monospace;
+      color: var(--text-muted);
+      font-size: 12px;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+    }
+
+    .home-search-wrap {
+      display: flex;
+      align-items: center;
+      width: min(560px, 88vw);
+      background: var(--bg2);
+      border: 1px solid var(--border-bright);
+      border-radius: 8px;
+      padding: 0 16px;
+      height: 52px;
+      gap: 12px;
+      box-shadow: 0 0 20px var(--red-glow), 0 0 60px rgba(255,0,51,.1);
+      transition: box-shadow .2s;
+    }
+    .home-search-wrap:focus-within {
+      box-shadow: 0 0 30px var(--red-glow), 0 0 80px rgba(255,0,51,.15);
+    }
+
+    .home-search-icon { color: var(--red); font-size: 18px; flex-shrink: 0; }
+
+    .home-search {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text);
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 18px;
+      font-weight: 500;
+    }
+    .home-search::placeholder { color: var(--text-muted); }
+
+    .home-search-btn {
+      background: var(--red);
+      border: none;
+      border-radius: 5px;
+      color: #fff;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      padding: 6px 14px;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: all .15s;
+    }
+    .home-search-btn:hover { box-shadow: 0 0 14px var(--red-glow); }
+
+    /* Quicklinks */
+    .quicklinks {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      justify-content: center;
+      max-width: 560px;
+    }
+
+    .quicklink {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      padding: 14px 18px;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all .2s;
+      min-width: 80px;
+    }
+    .quicklink:hover {
+      border-color: var(--red);
+      background: var(--red-faint);
+      box-shadow: 0 0 12px var(--red-glow);
+      transform: translateY(-2px);
+    }
+    .quicklink-icon { font-size: 22px; }
+    .quicklink-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-dim);
+      letter-spacing: .5px;
+    }
+
+    /* Status bar at bottom of home */
+    .home-status {
+      position: absolute;
+      bottom: 20px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 10px;
+      color: var(--text-muted);
+      letter-spacing: 2px;
+      display: flex;
+      gap: 24px;
+    }
+
+    .status-dot {
+      display: inline-block;
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--red);
+      box-shadow: 0 0 6px var(--red);
+      animation: blink 2s infinite;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: .3; }
+    }
+
+    /* ─── STATUS BAR ─────────────────────────────────────── */
+    #status-bar {
+      height: 22px;
+      background: var(--bg2);
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      gap: 16px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 10px;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    #status-text { flex: 1; }
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 1px 8px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      font-size: 9px;
+      letter-spacing: .5px;
+    }
+    .status-pill.red { border-color: rgba(255,0,51,.4); color: var(--red); }
+    .status-pill.green { border-color: rgba(0,255,136,.3); color: #00ff88; }
+
+    /* ─── SETTINGS SIDEBAR ───────────────────────────────── */
+    #settings-sidebar {
+      width: var(--sidebar-w);
+      background: var(--bg2);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      transform: translateX(100%);
+      transition: transform .25s cubic-bezier(.4,0,.2,1);
+      position: absolute;
+      right: 0; top: 0; bottom: 0;
+      z-index: 100;
+    }
+    #settings-sidebar.open { transform: translateX(0); }
+
+    .sidebar-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .sidebar-title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--red);
+      text-shadow: 0 0 8px var(--red-glow);
+      letter-spacing: 2px;
+    }
+    .sidebar-close {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 18px;
+      cursor: pointer;
+      transition: color .15s;
+    }
+    .sidebar-close:hover { color: var(--red); }
+
+    .sidebar-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+
+    .settings-section {
+      margin-bottom: 20px;
+    }
+    .settings-section-title {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 2px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 4px;
+      border-bottom: 1px solid rgba(255,255,255,.04);
+      gap: 8px;
+    }
+    .setting-row:last-child { border-bottom: none; }
+
+    .setting-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-dim);
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .setting-desc {
+      font-size: 10px;
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+
+    /* Toggle */
+    .toggle {
+      position: relative;
+      width: 38px; height: 20px;
+      flex-shrink: 0;
+    }
+    .toggle input { display: none; }
+    .toggle-track {
+      position: absolute;
+      inset: 0;
+      background: var(--bg4);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      cursor: pointer;
+      transition: all .2s;
+    }
+    .toggle input:checked + .toggle-track {
+      background: var(--red-dark);
+      border-color: var(--red);
+      box-shadow: 0 0 8px var(--red-glow);
+    }
+    .toggle-track::after {
+      content: '';
+      position: absolute;
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      top: 2px; left: 2px;
+      transition: all .2s;
+    }
+    .toggle input:checked + .toggle-track::after {
+      background: var(--red);
+      transform: translateX(18px);
+      box-shadow: 0 0 6px var(--red);
+    }
+
+    /* Select */
+    .setting-select {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 11px;
+      padding: 4px 8px;
+      outline: none;
+      cursor: pointer;
+      min-width: 100px;
+    }
+    .setting-select:focus { border-color: var(--red); box-shadow: 0 0 6px var(--red-glow); }
+    .setting-select option { background: var(--bg2); }
+
+    /* Input */
+    .setting-input {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 11px;
+      padding: 4px 8px;
+      outline: none;
+      width: 100%;
+      margin-top: 6px;
+    }
+    .setting-input:focus { border-color: var(--red); box-shadow: 0 0 6px var(--red-glow); }
+
+    /* Action buttons in settings */
+    .setting-action {
+      width: 100%;
+      padding: 9px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      color: var(--text-dim);
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .15s;
+      margin-bottom: 6px;
+      text-align: left;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .setting-action:hover {
+      border-color: var(--red);
+      color: var(--red);
+      background: var(--red-faint);
+    }
+    .setting-action.danger { border-color: rgba(255,0,51,.3); }
+    .setting-action.danger:hover { background: rgba(255,0,51,.15); }
+
+    /* ─── LOADING BAR ────────────────────────────────────── */
+    #loading-bar {
+      position: fixed;
+      top: 78px; left: 0; right: 0;
+      height: 2px;
+      background: transparent;
+      z-index: 500;
+      pointer-events: none;
+    }
+    #loading-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--red), #ff4466);
+      box-shadow: 0 0 8px var(--red);
+      width: 0;
+      transition: width .4s ease;
+    }
+    #loading-bar.active #loading-bar-fill {
+      animation: load-anim 1.5s ease-in-out infinite;
+    }
+    @keyframes load-anim {
+      0% { width: 0; margin-left: 0; }
+      50% { width: 60%; margin-left: 20%; }
+      100% { width: 0; margin-left: 100%; }
+    }
+
+    /* ─── TOAST NOTIFICATIONS ────────────────────────────── */
+    #toast-container {
+      position: fixed;
+      bottom: 40px; right: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 9998;
+    }
+    .toast {
+      background: var(--bg2);
+      border: 1px solid var(--border-bright);
+      border-radius: 6px;
+      padding: 10px 16px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 11px;
+      color: var(--text);
+      box-shadow: 0 0 16px var(--red-glow);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      animation: toast-in .2s ease;
+      max-width: 280px;
+    }
+    @keyframes toast-in {
+      from { opacity: 0; transform: translateX(20px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    .toast-icon { color: var(--red); font-size: 14px; }
+
+    /* ─── PROXY BADGE ────────────────────────────────────── */
+    #proxy-badge {
+      position: fixed;
+      top: 90px; right: 16px;
+      background: var(--bg2);
+      border: 1px solid var(--border-bright);
+      border-radius: 4px;
+      padding: 4px 10px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 9px;
+      color: var(--red);
+      letter-spacing: 1px;
+      box-shadow: 0 0 10px var(--red-glow);
+      display: none;
+      z-index: 200;
+      animation: badge-pulse 2s infinite;
+    }
+    @keyframes badge-pulse {
+      0%, 100% { box-shadow: 0 0 10px var(--red-glow); }
+      50% { box-shadow: 0 0 20px var(--red-glow), 0 0 40px rgba(255,0,51,.2); }
+    }
+
+    /* ─── CONTEXT MENU ───────────────────────────────────── */
+    #ctx-menu {
+      position: fixed;
+      background: var(--bg2);
+      border: 1px solid var(--border-bright);
+      border-radius: 6px;
+      padding: 6px;
+      z-index: 9000;
+      display: none;
+      min-width: 160px;
+      box-shadow: 0 8px 30px rgba(0,0,0,.6), 0 0 20px var(--red-glow);
+    }
+    .ctx-item {
+      padding: 7px 12px;
+      border-radius: 4px;
+      font-size: 12.5px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-dim);
+      transition: all .1s;
+    }
+    .ctx-item:hover { background: var(--red-faint); color: var(--red); }
+    .ctx-sep { height: 1px; background: var(--border); margin: 4px 0; }
+
+    /* ─── PROXY SETUP OVERLAY ────────────────────────────── */
+    #proxy-setup {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.85);
+      z-index: 8000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(4px);
+    }
+    .setup-card {
+      background: var(--bg2);
+      border: 1px solid var(--border-bright);
+      border-radius: 12px;
+      padding: 36px;
+      max-width: 420px;
+      width: 90%;
+      box-shadow: 0 0 60px var(--red-glow);
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .setup-logo {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 42px;
+      font-weight: 900;
+      color: var(--red);
+      text-shadow: 0 0 20px var(--red), 0 0 60px var(--red-glow);
+    }
+    .setup-title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 14px;
+      letter-spacing: 3px;
+      color: var(--text-dim);
+    }
+    .setup-status {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.8;
+    }
+    .setup-progress {
+      height: 3px;
+      background: var(--bg4);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .setup-progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--red), #ff4466);
+      box-shadow: 0 0 8px var(--red);
+      width: 0;
+      transition: width .4s ease;
+    }
+    .setup-btn {
+      background: var(--red);
+      border: none;
+      border-radius: 6px;
+      color: #fff;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      padding: 12px 24px;
+      cursor: pointer;
+      transition: all .2s;
+      display: none;
+    }
+    .setup-btn:hover { box-shadow: 0 0 20px var(--red-glow); transform: scale(1.02); }
+
+    /* ─── ABOUT MODAL ────────────────────────────────────── */
+    #about-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.8);
+      z-index: 7000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+    #about-modal.open { display: flex; }
+    .about-card {
+      background: var(--bg2);
+      border: 1px solid var(--border-bright);
+      border-radius: 12px;
+      padding: 32px;
+      max-width: 380px;
+      width: 90%;
+      box-shadow: 0 0 40px var(--red-glow);
+      text-align: center;
+    }
+    .about-logo {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 56px;
+      font-weight: 900;
+      color: var(--red);
+      text-shadow: 0 0 20px var(--red), 0 0 50px var(--red-glow);
+    }
+    .about-version {
+      font-family: 'Share Tech Mono', monospace;
+      color: var(--text-muted);
+      font-size: 11px;
+      letter-spacing: 2px;
+      margin: 6px 0 20px;
+    }
+    .about-line {
+      font-size: 13px;
+      color: var(--text-dim);
+      margin-bottom: 8px;
+      line-height: 1.6;
+    }
+    .about-tag {
+      display: inline-block;
+      background: var(--red-faint);
+      border: 1px solid var(--border-bright);
+      border-radius: 4px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 10px;
+      color: var(--red);
+      padding: 3px 8px;
+      margin: 3px;
+    }
+    .about-close {
+      margin-top: 20px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-dim);
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 8px 24px;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .about-close:hover { border-color: var(--red); color: var(--red); }
+
+    /* ─── ANIMATIONS ─────────────────────────────────────── */
+    .fade-in { animation: fadeIn .2s ease; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    /* Corner grid decoration */
+    .home-grid {
+      position: absolute;
+      bottom: 0; right: 0;
+      width: 200px; height: 200px;
+      background-image:
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 24px 24px;
+      opacity: .4;
+      mask-image: radial-gradient(circle at bottom right, black 30%, transparent 70%);
+    }
+
+    /* Neon line accents */
+    .neon-line {
+      position: absolute;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--red), transparent);
+      box-shadow: 0 0 6px var(--red);
+    }
+  </style>
+</head>
+<body>
+  <!-- Loading Bar -->
+  <div id="loading-bar"><div id="loading-bar-fill"></div></div>
+
+  <!-- Proxy Badge -->
+  <div id="proxy-badge">⬡ SCRAMJET ACTIVE</div>
+
+  <!-- Toast Container -->
+  <div id="toast-container"></div>
+
+  <!-- Context Menu -->
+  <div id="ctx-menu">
+    <div class="ctx-item" onclick="ctxAction('newTab')">⊕ New Tab</div>
+    <div class="ctx-item" onclick="ctxAction('back')">← Back</div>
+    <div class="ctx-item" onclick="ctxAction('forward')">→ Forward</div>
+    <div class="ctx-item" onclick="ctxAction('reload')">↺ Reload</div>
+    <div class="ctx-sep"></div>
+    <div class="ctx-item" onclick="ctxAction('copyUrl')">⊡ Copy URL</div>
+    <div class="ctx-item" onclick="ctxAction('openProxy')">⬡ Toggle Proxy</div>
+    <div class="ctx-sep"></div>
+    <div class="ctx-item" onclick="ctxAction('settings')">⚙ Settings</div>
+  </div>
+
+  <!-- About Modal -->
+  <div id="about-modal">
+    <div class="about-card">
+      <div class="about-logo">RED</div>
+      <div class="about-version">VERSION 1.0.0 — NEON BUILD</div>
+      <div class="about-line">A high-performance proxy browser powered by Scramjet and DuckDuckGo.</div>
+      <div style="margin: 12px 0;">
+        <span class="about-tag">Scramjet Proxy</span>
+        <span class="about-tag">DuckDuckGo</span>
+        <span class="about-tag">Bare Server</span>
+        <span class="about-tag">Service Worker</span>
+      </div>
+      <div class="about-line" style="font-size:11px; color: var(--text-muted);">
+        Built with Node.js · Express · bare-server-node
+      </div>
+      <button class="about-close" onclick="document.getElementById('about-modal').classList.remove('open')">CLOSE</button>
+    </div>
+  </div>
+
+  <!-- Proxy Setup Overlay -->
+  <div id="proxy-setup">
+    <div class="setup-card">
+      <div class="setup-logo">RED</div>
+      <div class="setup-title">INITIALIZING PROXY</div>
+      <div class="setup-status" id="setup-status">
+        Registering service worker...<br>
+        Connecting to Bare server...<br>
+        Loading Scramjet codec...
+      </div>
+      <div class="setup-progress"><div class="setup-progress-fill" id="setup-progress-fill"></div></div>
+      <button class="setup-btn" id="setup-skip-btn" onclick="dismissSetup()">LAUNCH RED →</button>
+    </div>
+  </div>
+
+  <!-- Main App -->
+  <div id="app">
+    <!-- TOP CHROME -->
+    <div id="chrome">
+      <div id="logo">R<span>E</span>D</div>
+
+      <!-- Nav -->
+      <button class="nav-btn" id="btn-back"    title="Back"    onclick="navBack()">←</button>
+      <button class="nav-btn" id="btn-forward" title="Forward" onclick="navForward()">→</button>
+      <button class="nav-btn" id="btn-reload"  title="Reload"  onclick="navReload()">↺</button>
+      <button class="nav-btn" id="btn-home"    title="Home"    onclick="goHome()">⌂</button>
+
+      <!-- URL Bar -->
+      <div id="url-wrap">
+        <span id="security-icon">○</span>
+        <input id="url-bar" type="text" placeholder="Search DuckDuckGo or enter URL..."
+               spellcheck="false" autocomplete="off"
+               onkeydown="if(event.key==='Enter') navigate()" />
+        <button id="go-btn" onclick="navigate()">GO</button>
+      </div>
+
+      <!-- Actions -->
+      <button class="action-btn" title="Bookmark" onclick="addBookmark()">☆</button>
+      <button class="action-btn" id="btn-proxy-toggle" title="Toggle Proxy" onclick="toggleProxy()">⬡</button>
+      <button class="action-btn" id="btn-settings" title="Settings" onclick="toggleSettings()">⚙</button>
+      <button class="action-btn" title="About RED" onclick="document.getElementById('about-modal').classList.add('open')">ℹ</button>
+    </div>
+
+    <!-- TAB BAR -->
+    <div id="tab-bar">
+      <!-- Tabs rendered here -->
+      <button id="new-tab-btn" onclick="newTab()" title="New Tab">+</button>
+    </div>
+
+    <!-- CONTENT AREA -->
+    <div id="content-area">
+      <!-- Frames -->
+      <div id="frames"></div>
+
+      <!-- Settings Sidebar -->
+      <div id="settings-sidebar">
+        <div class="sidebar-header">
+          <span class="sidebar-title">SETTINGS</span>
+          <button class="sidebar-close" onclick="toggleSettings()">✕</button>
+        </div>
+        <div class="sidebar-body">
+
+          <!-- Proxy -->
+          <div class="settings-section">
+            <div class="settings-section-title">Proxy</div>
+            <div class="setting-row">
+              <div class="setting-label">
+                Scramjet Proxy
+                <span class="setting-desc">Route traffic through Scramjet</span>
+              </div>
+              <label class="toggle">
+                <input type="checkbox" id="s-proxy" checked onchange="saveSetting('proxy', this.checked ? 'scramjet' : 'off')">
+                <div class="toggle-track"></div>
+              </label>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">
+                Proxy Engine
+                <span class="setting-desc">Transport method</span>
+              </div>
+              <select class="setting-select" onchange="saveSetting('engine', this.value)">
+                <option value="scramjet">Scramjet</option>
+                <option value="uv">Ultraviolet</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">
+                Bare Server URL
+              </div>
+            </div>
+            <input class="setting-input" type="text" id="s-bare-url" value="/bare/" placeholder="/bare/"
+                   onchange="saveSetting('bareUrl', this.value)" />
+          </div>
+
+          <!-- Search -->
+          <div class="settings-section">
+            <div class="settings-section-title">Search & Navigation</div>
+            <div class="setting-row">
+              <div class="setting-label">
+                Search Engine
+              </div>
+              <select class="setting-select" id="s-search" onchange="saveSetting('searchEngine', this.value)">
+                <option value="duckduckgo">DuckDuckGo</option>
+                <option value="google">Google</option>
+                <option value="bing">Bing</option>
+                <option value="brave">Brave Search</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">
+                Homepage
+              </div>
+              <select class="setting-select" onchange="saveSetting('homepage', this.value)">
+                <option value="about:home">RED Home</option>
+                <option value="duckduckgo">DuckDuckGo</option>
+                <option value="blank">Blank</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">
+                Open links in new tab
+              </div>
+              <label class="toggle">
+                <input type="checkbox" id="s-newtab" onchange="saveSetting('newTab', this.checked)">
+                <div class="toggle-track"></div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Privacy -->
+          <div class="settings-section">
+            <div class="settings-section-title">Privacy & Security</div>
+            <div class="setting-row">
+              <div class="setting-label">
+                Ad & Tracker Block
+                <span class="setting-desc">Block ads via DNS filter</span>
+              </div>
+              <label class="toggle">
+                <input type="checkbox" id="s-adblock" checked onchange="saveSetting('adblock', this.checked)">
+                <div class="toggle-track"></div>
+              </label>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">
+                JavaScript
+                <span class="setting-desc">Allow JS in proxied pages</span>
+              </div>
+              <label class="toggle">
+                <input type="checkbox" id="s-js" checked onchange="saveSetting('javascript', this.checked)">
+                <div class="toggle-track"></div>
+              </label>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">
+                Panic Key
+                <span class="setting-desc">Hide browser instantly</span>
+              </div>
+              <select class="setting-select" onchange="saveSetting('panicKey', this.value)">
+                <option value="Escape">Esc × 2</option>
+                <option value="F12">F12</option>
+                <option value="none">Disabled</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">
+                Cloak Tab Title
+                <span class="setting-desc">Show fake tab title</span>
+              </div>
+              <label class="toggle">
+                <input type="checkbox" id="s-cloak" onchange="toggleTitleCloak(this.checked)">
+                <div class="toggle-track"></div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Appearance -->
+          <div class="settings-section">
+            <div class="settings-section-title">Appearance</div>
+            <div class="setting-row">
+              <div class="setting-label">
+                Animations
+                <span class="setting-desc">Neon flicker & effects</span>
+              </div>
+              <label class="toggle">
+                <input type="checkbox" id="s-anim" checked onchange="toggleAnimations(this.checked)">
+                <div class="toggle-track"></div>
+              </label>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">
+                Scanlines
+                <span class="setting-desc">CRT scanline overlay</span>
+              </div>
+              <label class="toggle">
+                <input type="checkbox" id="s-scanlines" checked onchange="toggleScanlines(this.checked)">
+                <div class="toggle-track"></div>
+              </label>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">Accent Color</div>
+              <input type="color" value="#ff0033" style="width:36px;height:24px;border:1px solid var(--border);background:transparent;cursor:pointer;border-radius:3px;"
+                     onchange="setAccent(this.value)" />
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div class="settings-section">
+            <div class="settings-section-title">Actions</div>
+            <button class="setting-action" onclick="clearHistory()">🗑 Clear History</button>
+            <button class="setting-action" onclick="clearCookies()">🍪 Clear Cookies</button>
+            <button class="setting-action" onclick="exportSettings()">⬇ Export Settings</button>
+            <button class="setting-action" onclick="importSettings()">⬆ Import Settings</button>
+            <button class="setting-action danger" onclick="resetAll()">⚠ Reset Everything</button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- STATUS BAR -->
+    <div id="status-bar">
+      <span id="status-text">Ready</span>
+      <span class="status-pill green"><span class="status-dot"></span>SCRAMJET</span>
+      <span class="status-pill red">DDG SEARCH</span>
+      <span id="status-time" style="font-size:9px;"></span>
+    </div>
+  </div>
+
+  <script>
+  // ─── STATE ──────────────────────────────────────────────
+  let tabs = [];
+  let activeTabId = null;
+  let bookmarks = JSON.parse(localStorage.getItem('red-bookmarks') || '[]');
+  let settings = JSON.parse(localStorage.getItem('red-settings') || '{}');
+  let proxyEnabled = true;
+  let swRegistered = false;
+  let escCount = 0, escTimer = null;
+
+  const SEARCH_ENGINES = {
+    duckduckgo: q => `https://duckduckgo.com/?q=${encodeURIComponent(q)}&kae=d&k1=-1`,
+    google:     q => `https://www.google.com/search?q=${encodeURIComponent(q)}`,
+    bing:       q => `https://www.bing.com/search?q=${encodeURIComponent(q)}`,
+    brave:      q => `https://search.brave.com/search?q=${encodeURIComponent(q)}`,
+  };
+
+  // ─── PROXY SETUP ────────────────────────────────────────
+  async function initProxy() {
+    const fill = document.getElementById('setup-progress-fill');
+    const status = document.getElementById('setup-status');
+    const skipBtn = document.getElementById('setup-skip-btn');
+
+    const steps = [
+      { text: '✓ Checking bare server connection...', pct: 20 },
+      { text: '✓ Registering Scramjet service worker...', pct: 45 },
+      { text: '✓ Initializing codec transport...', pct: 70 },
+      { text: '✓ Configuring DuckDuckGo search engine...', pct: 90 },
+      { text: '✓ RED Browser ready.', pct: 100 },
+    ];
+
+    for (const step of steps) {
+      await delay(420 + Math.random() * 200);
+      status.innerHTML += '<br>' + step.text;
+      fill.style.width = step.pct + '%';
+    }
+
+    // Try to register SW
+    if ('serviceWorker' in navigator) {
+      try {
+        const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+        await navigator.serviceWorker.ready;
+        swRegistered = true;
+        setStatus('Scramjet SW active');
+      } catch (e) {
+        status.innerHTML += `<br><span style="color:var(--red)">⚠ SW failed: ${e.message}</span>`;
+        status.innerHTML += '<br><span style="color:#666">Running in direct mode.</span>';
+      }
+    }
+
+    await delay(300);
+    skipBtn.style.display = 'block';
+  }
+
+  function dismissSetup() {
+    document.getElementById('proxy-setup').style.opacity = '0';
+    document.getElementById('proxy-setup').style.transition = 'opacity .3s';
+    setTimeout(() => document.getElementById('proxy-setup').style.display = 'none', 300);
+    if (proxyEnabled) {
+      document.getElementById('proxy-badge').style.display = 'block';
+      toast('⬡ Scramjet proxy active');
+    }
+  }
+
+  // ─── TAB MANAGEMENT ─────────────────────────────────────
+  function createTab(url) {
+    const id = 'tab-' + Date.now();
+    const tab = {
+      id, url: url || 'about:home',
+      title: 'New Tab',
+      favicon: '○',
+      canBack: false, canForward: false,
+    };
+    tabs.push(tab);
+    renderTabs();
+    activateTab(id);
+    if (tab.url !== 'about:home') loadUrl(id, tab.url);
+    else showHomePage(id);
+    return id;
+  }
+
+  function newTab(url) { return createTab(url); }
+
+  function closeTab(id) {
+    const idx = tabs.findIndex(t => t.id === id);
+    tabs.splice(idx, 1);
+    document.getElementById(id)?.remove();
+    document.getElementById('frame-' + id)?.remove();
+    if (tabs.length === 0) { newTab(); return; }
+    if (activeTabId === id) {
+      const nextIdx = Math.min(idx, tabs.length - 1);
+      activateTab(tabs[nextIdx].id);
+    }
+    renderTabs();
+  }
+
+  function activateTab(id) {
+    activeTabId = id;
+    // Show frame
+    document.querySelectorAll('.frame').forEach(f => f.classList.remove('active'));
+    const frame = document.getElementById('frame-' + id);
+    if (frame) frame.classList.add('active');
+    // Update tab styling
+    renderTabs();
+    // Update URL bar
+    const tab = getTab(id);
+    if (tab) {
+      document.getElementById('url-bar').value = tab.url === 'about:home' ? '' : tab.url;
+      updateNavButtons(tab);
+    }
+  }
+
+  function getTab(id) { return tabs.find(t => t.id === id); }
+
+  function renderTabs() {
+    const bar = document.getElementById('tab-bar');
+    // Remove existing tab elements
+    bar.querySelectorAll('.tab').forEach(el => el.remove());
+    const newBtn = document.getElementById('new-tab-btn');
+
+    tabs.forEach(tab => {
+      const el = document.createElement('div');
+      el.className = 'tab' + (tab.id === activeTabId ? ' active' : '');
+      el.id = tab.id;
+      el.innerHTML = `
+        <span class="tab-favicon">${tab.favicon}</span>
+        <span class="tab-title">${tab.title}</span>
+        <span class="tab-close" onclick="event.stopPropagation();closeTab('${tab.id}')">✕</span>
+      `;
+      el.onclick = () => activateTab(tab.id);
+      bar.insertBefore(el, newBtn);
+    });
+  }
+
+  // ─── FRAME MANAGEMENT ───────────────────────────────────
+  function showHomePage(tabId) {
+    let frame = document.getElementById('frame-' + tabId);
+    if (!frame) {
+      frame = document.createElement('div');
+      frame.className = 'frame';
+      frame.id = 'frame-' + tabId;
+      document.getElementById('frames').appendChild(frame);
+    }
+
+    frame.innerHTML = `
+      <div class="home-page">
+        <div class="home-grid"></div>
+        <div class="home-logo">RED</div>
+        <div class="home-tagline">SCRAMJET PROXY BROWSER — POWERED BY DUCKDUCKGO</div>
+        <div class="home-search-wrap">
+          <span class="home-search-icon">⌕</span>
+          <input class="home-search" id="home-search-${tabId}" type="text"
+                 placeholder="Search or enter URL..."
+                 onkeydown="if(event.key==='Enter')navigateFromHome('${tabId}',this.value)"
+                 autocomplete="off" spellcheck="false" />
+          <button class="home-search-btn" onclick="navigateFromHome('${tabId}',document.getElementById('home-search-${tabId}').value)">SEARCH</button>
+        </div>
+        <div class="quicklinks">
+          ${renderQuicklinks(tabId)}
+        </div>
+        <div class="home-status">
+          <span><span class="status-dot"></span>SCRAMJET READY</span>
+          <span>DDG SEARCH ENGINE</span>
+          <span id="home-time-${tabId}"></span>
+        </div>
+      </div>
+    `;
+
+    // Focus search
+    setTimeout(() => document.getElementById('home-search-' + tabId)?.focus(), 50);
+    document.getElementById('security-icon').className = 'proxied';
+    document.getElementById('security-icon').textContent = '⬡';
+
+    // Update tab
+    const tab = getTab(tabId);
+    if (tab) { tab.title = 'New Tab'; tab.favicon = '○'; }
+    renderTabs();
+    setStatus('Home — RED Browser');
+  }
+
+  function renderQuicklinks(tabId) {
+    const links = [
+      { icon: '🦆', label: 'DuckDuckGo', url: 'https://duckduckgo.com' },
+      { icon: '📰', label: 'News', url: 'https://news.ycombinator.com' },
+      { icon: '🎬', label: 'YouTube', url: 'https://youtube.com' },
+      { icon: '💻', label: 'GitHub', url: 'https://github.com' },
+      { icon: '📡', label: 'Reddit', url: 'https://reddit.com' },
+      { icon: '🌐', label: 'Wikipedia', url: 'https://wikipedia.org' },
+    ];
+    return links.map(l => `
+      <div class="quicklink" onclick="loadUrl('${tabId}','${l.url}')">
+        <span class="quicklink-icon">${l.icon}</span>
+        <span class="quicklink-label">${l.label}</span>
+      </div>
+    `).join('');
+  }
+
+  function loadUrl(tabId, url) {
+    // If proxied, route through scramjet
+    const targetUrl = buildProxiedUrl(url);
+    const tab = getTab(tabId);
+
+    let frame = document.getElementById('frame-' + tabId);
+    if (!frame) {
+      frame = document.createElement('div');
+      frame.className = 'frame';
+      frame.id = 'frame-' + tabId;
+      document.getElementById('frames').appendChild(frame);
+    }
+
+    startLoading();
+    document.getElementById('url-bar').value = url;
+    setStatus('Loading ' + url + '...');
+
+    if (tab) {
+      tab.url = url;
+      tab.title = new URL(url.startsWith('http') ? url : 'https://' + url).hostname;
+      tab.favicon = '●';
+    }
+    renderTabs();
+
+    const iframe = document.createElement('iframe');
+    iframe.src = targetUrl;
+    iframe.sandbox = 'allow-scripts allow-same-origin allow-forms allow-popups allow-presentation';
+    iframe.referrerPolicy = 'no-referrer';
+    iframe.onload = () => {
+      stopLoading();
+      if (tab) tab.favicon = '○';
+      renderTabs();
+      updateSecurityIcon(url);
+      setStatus('Loaded: ' + url);
+    };
+    iframe.onerror = () => {
+      stopLoading();
+      setStatus('Failed to load: ' + url);
+    };
+
+    frame.innerHTML = '';
+    frame.appendChild(iframe);
+    activateTab(tabId);
+  }
+
+  function buildProxiedUrl(url) {
+    if (!url.startsWith('http')) url = 'https://' + url;
+    if (!proxyEnabled || !swRegistered) return url;
+    // Scramjet SW intercepts requests from /~/
+    return '/~/' + encodeURIComponent(url);
+  }
+
+  // ─── NAVIGATION ─────────────────────────────────────────
+  function navigate() {
+    let val = document.getElementById('url-bar').value.trim();
+    if (!val) return;
+    const url = resolveUrl(val);
+    loadUrl(activeTabId, url);
+  }
+
+  function navigateFromHome(tabId, val) {
+    val = val.trim();
+    if (!val) return;
+    const url = resolveUrl(val);
+    loadUrl(tabId, url);
+    document.getElementById('url-bar').value = url;
+  }
+
+  function resolveUrl(val) {
+    if (val.startsWith('http://') || val.startsWith('https://')) return val;
+    if (val.includes('.') && !val.includes(' ')) return 'https://' + val;
+    const engine = settings.searchEngine || 'duckduckgo';
+    return SEARCH_ENGINES[engine]?.(val) || SEARCH_ENGINES.duckduckgo(val);
+  }
+
+  function goHome() {
+    showHomePage(activeTabId);
+    document.getElementById('url-bar').value = '';
+    const tab = getTab(activeTabId);
+    if (tab) tab.url = 'about:home';
+    renderTabs();
+  }
+
+  function navBack() {
+    const frame = document.querySelector('#frame-' + activeTabId + ' iframe');
+    try { frame?.contentWindow?.history.back(); } catch(e) {}
+  }
+  function navForward() {
+    const frame = document.querySelector('#frame-' + activeTabId + ' iframe');
+    try { frame?.contentWindow?.history.forward(); } catch(e) {}
+  }
+  function navReload() {
+    const frame = document.querySelector('#frame-' + activeTabId + ' iframe');
+    startLoading();
+    try {
+      frame?.contentWindow?.location.reload();
+    } catch(e) {
+      // Cross-origin: reload src
+      if (frame) { const s = frame.src; frame.src = ''; frame.src = s; }
+    }
+    setTimeout(stopLoading, 1000);
+  }
+
+  function updateNavButtons(tab) {
+    document.getElementById('btn-back').disabled    = !tab?.canBack;
+    document.getElementById('btn-forward').disabled = !tab?.canForward;
+  }
+
+  function updateSecurityIcon(url) {
+    const icon = document.getElementById('security-icon');
+    if (proxyEnabled && swRegistered) {
+      icon.className = 'proxied';
+      icon.textContent = '⬡';
+    } else if (url.startsWith('https://')) {
+      icon.className = 'secure';
+      icon.textContent = '🔒';
+    } else {
+      icon.className = '';
+      icon.textContent = '○';
+    }
+  }
+
+  // ─── PROXY TOGGLE ────────────────────────────────────────
+  function toggleProxy() {
+    proxyEnabled = !proxyEnabled;
+    const btn = document.getElementById('btn-proxy-toggle');
+    const badge = document.getElementById('proxy-badge');
+    if (proxyEnabled) {
+      btn.classList.add('active');
+      badge.style.display = 'block';
+      toast('⬡ Proxy ENABLED');
+    } else {
+      btn.classList.remove('active');
+      badge.style.display = 'none';
+      toast('⊘ Proxy DISABLED');
+    }
+  }
+
+  // ─── SETTINGS ────────────────────────────────────────────
+  function toggleSettings() {
+    const s = document.getElementById('settings-sidebar');
+    const btn = document.getElementById('btn-settings');
+    s.classList.toggle('open');
+    btn.classList.toggle('active');
+  }
+
+  function saveSetting(key, val) {
+    settings[key] = val;
+    localStorage.setItem('red-settings', JSON.stringify(settings));
+    toast(`Setting saved: ${key}`);
+  }
+
+  function toggleAnimations(on) {
+    saveSetting('animations', on);
+    document.documentElement.style.setProperty('--anim', on ? 'running' : 'paused');
+    if (!on) {
+      document.querySelectorAll('[style*="animation"]').forEach(el => el.style.animationPlayState = 'paused');
+    }
+  }
+
+  function toggleScanlines(on) {
+    saveSetting('scanlines', on);
+    document.body.style.setProperty('--scanlines', on ? '1' : '0');
+    // Toggle ::before pseudo-element via class
+    document.body.classList.toggle('no-scanlines', !on);
+  }
+
+  function setAccent(hex) {
+    document.documentElement.style.setProperty('--red', hex);
+    saveSetting('accent', hex);
+  }
+
+  function toggleTitleCloak(on) {
+    saveSetting('titleCloak', on);
+    if (on) {
+      document.title = 'Google Drive';
+    } else {
+      document.title = 'RED Browser';
+    }
+    toast(on ? '🎭 Title cloaked' : '🎭 Title restored');
+  }
+
+  function clearHistory() {
+    localStorage.removeItem('red-history');
+    toast('🗑 History cleared');
+  }
+
+  function clearCookies() {
+    document.cookie.split(';').forEach(c => {
+      document.cookie = c.replace(/^ +/, '').replace(/=.*/, '=;expires=' + new Date().toUTCString() + ';path=/');
+    });
+    toast('🍪 Cookies cleared');
+  }
+
+  function exportSettings() {
+    const blob = new Blob([JSON.stringify(settings, null, 2)], { type: 'application/json' });
+    const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: 'red-settings.json' });
+    a.click();
+  }
+
+  function importSettings() {
+    const input = document.createElement('input');
+    input.type = 'file'; input.accept = '.json';
+    input.onchange = async e => {
+      const text = await e.target.files[0].text();
+      settings = JSON.parse(text);
+      localStorage.setItem('red-settings', JSON.stringify(settings));
+      toast('⬆ Settings imported');
+      applySettings();
+    };
+    input.click();
+  }
+
+  function resetAll() {
+    if (!confirm('Reset ALL settings and data?')) return;
+    localStorage.clear();
+    location.reload();
+  }
+
+  function applySettings() {
+    if (settings.accent) setAccent(settings.accent);
+    if (settings.titleCloak) document.title = 'Google Drive';
+    const proxyEl = document.getElementById('s-proxy');
+    if (proxyEl) proxyEl.checked = settings.proxy !== 'off';
+  }
+
+  // ─── BOOKMARKS ───────────────────────────────────────────
+  function addBookmark() {
+    const tab = getTab(activeTabId);
+    if (!tab || tab.url === 'about:home') { toast('Nothing to bookmark'); return; }
+    bookmarks.push({ title: tab.title, url: tab.url, favicon: tab.favicon });
+    localStorage.setItem('red-bookmarks', JSON.stringify(bookmarks));
+    toast('☆ Bookmarked: ' + tab.title);
+  }
+
+  // ─── LOADING BAR ─────────────────────────────────────────
+  function startLoading() {
+    document.getElementById('loading-bar').classList.add('active');
+  }
+  function stopLoading() {
+    document.getElementById('loading-bar').classList.remove('active');
+  }
+
+  // ─── STATUS ──────────────────────────────────────────────
+  function setStatus(msg) {
+    document.getElementById('status-text').textContent = msg;
+  }
+
+  // ─── TOAST ───────────────────────────────────────────────
+  function toast(msg, duration = 2500) {
+    const el = document.createElement('div');
+    el.className = 'toast';
+    el.innerHTML = `<span class="toast-icon">⬡</span>${msg}`;
+    document.getElementById('toast-container').appendChild(el);
+    setTimeout(() => {
+      el.style.transition = 'opacity .3s';
+      el.style.opacity = '0';
+      setTimeout(() => el.remove(), 300);
+    }, duration);
+  }
+
+  // ─── CONTEXT MENU ────────────────────────────────────────
+  document.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    const menu = document.getElementById('ctx-menu');
+    menu.style.display = 'block';
+    const x = Math.min(e.clientX, window.innerWidth - 180);
+    const y = Math.min(e.clientY, window.innerHeight - 200);
+    menu.style.left = x + 'px';
+    menu.style.top = y + 'px';
+  });
+  document.addEventListener('click', () => {
+    document.getElementById('ctx-menu').style.display = 'none';
+  });
+  function ctxAction(action) {
+    const acts = {
+      newTab: () => newTab(),
+      back: navBack, forward: navForward, reload: navReload,
+      copyUrl: () => { navigator.clipboard?.writeText(getTab(activeTabId)?.url || ''); toast('Copied URL'); },
+      openProxy: toggleProxy,
+      settings: toggleSettings,
+    };
+    acts[action]?.();
+  }
+
+  // ─── PANIC KEY ───────────────────────────────────────────
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      escCount++;
+      clearTimeout(escTimer);
+      if (escCount >= 2) {
+        escCount = 0;
+        document.body.style.display = 'none';
+        setTimeout(() => document.body.style.display = '', 3000);
+      } else {
+        escTimer = setTimeout(() => escCount = 0, 800);
+      }
+    }
+    // Ctrl+T = new tab
+    if (e.ctrlKey && e.key === 't') { e.preventDefault(); newTab(); }
+    // Ctrl+W = close tab
+    if (e.ctrlKey && e.key === 'w') { e.preventDefault(); closeTab(activeTabId); }
+    // Ctrl+L = focus URL bar
+    if (e.ctrlKey && e.key === 'l') { e.preventDefault(); document.getElementById('url-bar').select(); }
+  });
+
+  // ─── CLOCK ───────────────────────────────────────────────
+  function updateClock() {
+    const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    document.getElementById('status-time').textContent = t;
+  }
+  setInterval(updateClock, 1000);
+  updateClock();
+
+  // ─── UTILITIES ───────────────────────────────────────────
+  const delay = ms => new Promise(r => setTimeout(r, ms));
+
+  // ─── INIT ────────────────────────────────────────────────
+  window.addEventListener('DOMContentLoaded', async () => {
+    applySettings();
+    // Start with one tab
+    const firstId = createTab();
+    document.getElementById('btn-proxy-toggle').classList.add('active');
+
+    // Kick off proxy setup
+    initProxy();
+  });
+  </script>
+</body>
+</html>
