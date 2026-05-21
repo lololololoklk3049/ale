@@ -1036,7 +1036,7 @@
         <span id="security-icon">○</span>
         <input id="url-bar" type="text" placeholder="Search DuckDuckGo or enter URL..."
                spellcheck="false" autocomplete="off"
-               onkeydown="if(event.key==='Enter') navigate()" >
+               onkeydown="if(event.key==='Enter') navigate()" />
         <button id="go-btn" onclick="navigate()">GO</button>
       </div>
 
@@ -1272,32 +1272,44 @@
     // Try to register SW
     if ('serviceWorker' in navigator) {
       try {
-        // Use relative path — works both on root and GitHub Pages /repo/ subdirs
-        const swPath = new URL('sw.js', location.href).href;
-        const reg = await navigator.serviceWorker.register(swPath, {
-          scope: new URL('./', location.href).pathname,
+        const base  = new URL('./', location.href);
+        const swUrl = new URL('sw.js', base).href;
+        const scope = base.pathname; // e.g. '/' or '/ale/'
+
+        const reg = await navigator.serviceWorker.register(swUrl, {
+          scope,
           updateViaCache: 'none',
         });
-        // Wait for SW to be ready (handles first install + existing controller)
+
         await new Promise(resolve => {
           if (navigator.serviceWorker.controller) { resolve(); return; }
           navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true });
-          // Fallback: resolve after 3s even if controllerchange doesn't fire
-          setTimeout(resolve, 3000);
+          setTimeout(resolve, 6000);
         });
-        swRegistered = true;
-        setStatus('Scramjet SW active');
+
+        if (navigator.serviceWorker.controller) {
+          swRegistered = true;
+          status.innerHTML += '<br><span style="color:#00ff88">✓ Proxy service worker active.</span>';
+          setStatus('Proxy active');
+        } else {
+          // First install — SW can not control this page until reload
+          status.innerHTML += '<br><span style="color:#ffaa00">⚠ First-time setup — reloading to activate...</span>';
+          await delay(1500);
+          location.reload();
+          return;
+        }
       } catch (e) {
-        status.innerHTML += `<br><span style="color:var(--red)">⚠ SW failed: ${e.message}</span>`;
-        status.innerHTML += '<br><span style="color:#888">Proxy may not intercept requests — try refreshing after SW installs.</span>';
+        status.innerHTML += `<br><span style="color:var(--red)">⚠ SW error: ${e.message}</span>`;
+        status.innerHTML += '<br><span style="color:#666">Proxy unavailable — sites may not load.</span>';
       }
+    } else {
+      status.innerHTML += '<br><span style="color:var(--red)">⚠ Service workers not supported in this browser.</span>';
     }
 
     await delay(300);
     skipBtn.style.display = 'block';
-    // If SW registered successfully, auto-launch after a short delay
     if (swRegistered) {
-      setTimeout(dismissSetup, 800);
+      setTimeout(dismissSetup, 600);
     }
   }
 
@@ -1452,11 +1464,10 @@
     `).join('');
   }
 
-  function loadUrl(tabId, url) {
-    // If proxied, route through scramjet
-    const targetUrl = buildProxiedUrl(url);
+  async function loadUrl(tabId, url) {
     const tab = getTab(tabId);
 
+    // Create frame first so UI feels responsive
     let frame = document.getElementById('frame-' + tabId);
     if (!frame) {
       frame = document.createElement('div');
@@ -1464,23 +1475,41 @@
       frame.id = 'frame-' + tabId;
       document.getElementById('frames').appendChild(frame);
     }
-
+    activateTab(tabId);
     startLoading();
     document.getElementById('url-bar').value = url;
-    setStatus('Loading ' + url + '...');
 
     if (tab) {
       tab.url = url;
-      tab.title = new URL(url.startsWith('http') ? url : 'https://' + url).hostname;
+      try { tab.title = new URL(url.startsWith('http') ? url : 'https://' + url).hostname; }
+      catch { tab.title = url; }
       tab.favicon = '●';
     }
     renderTabs();
 
+    // If proxy is on but SW hasn't claimed this page yet, show a holding page
+    // instead of hitting GitHub Pages with /~/ and getting a 404.
+    if (proxyEnabled && !swRegistered) {
+      showWaitingPage(frame, url);
+      setStatus('Waiting for proxy to start...');
+      // Poll up to 8 seconds for SW to become active
+      const deadline = Date.now() + 8000;
+      while (!swRegistered && Date.now() < deadline) {
+        await delay(200);
+      }
+      if (!swRegistered) {
+        // SW never came up — load directly (may be blocked by CORS/X-Frame-Options)
+        setStatus('Proxy unavailable — loading directly...');
+      }
+    }
+
+    const targetUrl = buildProxiedUrl(url);
+    setStatus('Loading ' + url + '...');
+
     const iframe = document.createElement('iframe');
     iframe.src = targetUrl;
-    // allow-same-origin is required so the Scramjet service worker
-    // (registered on this origin) can intercept requests inside the frame.
-    iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups allow-pointer-lock allow-modals');
+    // allow-same-origin lets the SW (same origin) intercept requests inside frame.
+    iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups allow-pointer-lock allow-modals allow-downloads');
     iframe.referrerPolicy = 'no-referrer';
     iframe.style.cssText = 'width:100%;height:100%;border:none;background:#fff;';
     iframe.onload = () => {
@@ -1497,15 +1526,32 @@
 
     frame.innerHTML = '';
     frame.appendChild(iframe);
-    activateTab(tabId);
+  }
+
+  function showWaitingPage(frame, url) {
+    frame.innerHTML = `<div style="
+      background:#070707;color:#ff0033;font-family:'Courier New',monospace;
+      height:100%;display:flex;flex-direction:column;align-items:center;
+      justify-content:center;gap:16px;text-align:center;padding:40px;">
+      <div style="font-size:48px;text-shadow:0 0 20px #ff0033;letter-spacing:8px;
+           font-family:Orbitron,sans-serif;font-weight:900;">RED</div>
+      <div style="color:#888;font-size:13px;letter-spacing:2px;">ACTIVATING PROXY...</div>
+      <div style="width:200px;height:2px;background:#1c1c1c;border-radius:2px;overflow:hidden;">
+        <div style="height:100%;background:#ff0033;box-shadow:0 0 8px #ff0033;
+             animation:bar 1.4s ease-in-out infinite;width:60%;"></div>
+      </div>
+      <div style="color:#444;font-size:11px;">Target: ${url}</div>
+      <style>@keyframes bar{0%{margin-left:-60%}100%{margin-left:100%}}</style>
+    </div>`;
   }
 
   function buildProxiedUrl(url) {
     if (!url.startsWith('http')) url = 'https://' + url;
-    // Use the proxy path whenever proxy is enabled, regardless of swRegistered.
-    // The SW will handle /~/ once it's active; on first load it may pass through.
     if (!proxyEnabled) return url;
-    return '/~/' + encodeURIComponent(url);
+    // Build a relative /~/ URL so it stays on the same origin.
+    // The SW intercepts it and proxies the actual target.
+    const base = new URL('./', location.href).pathname; // e.g. '/ale/'
+    return base + '~/' + encodeURIComponent(url);
   }
 
   // ─── NAVIGATION ─────────────────────────────────────────
